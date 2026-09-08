@@ -1,5 +1,6 @@
+import {analysisBody,smallerBatch,requestSummary} from './transport.js';
 import {CONTRACT,CATEGORIES,horizon,decide,fixture,parseVtt,bufferAhead} from './core.js';
-import {segmentSchema,collectRows} from './decisions.js';
+import {collectRows} from './decisions.js';
 import {expandGroups} from './rules.js';
 import {initChat} from './chat.js';
 import {FILTERS,thresholdFor,buildPrompt} from './categories.js';
@@ -7,7 +8,7 @@ import {request,responseText,testConnection,explain,redact,normalizeModel} from 
 const $=id=>document.getElementById(id),video=$('video'),probe=$('probe'),canvas=$('screen'),ctx=canvas.getContext('2d');
 let mode='none',url=null,subtitles=[],records=new Map(),log=[],epoch=0,wanted=false,busy=false,controller=null,skipped=new Set(),lastPaint=0;
 let buffering=true,failure='',phase='',phaseStart=0,connected='',testing=false,testCtl=null,loading=false,dropped=0;
-let customRules=[],chatUI=null;const attempts=new Map();
+let customRules=[],chatUI=null;const attempts=new Map();let batchLimit=CONTRACT.batchSegments;
 const groups=()=>({violence:$('violence').checked,sexual:$('sexual_content').checked,language:$('strong_language').checked});
 const diagnostics=[];
 function diagnose(entry){
@@ -19,7 +20,7 @@ function diagnose(entry){
   if(entry.state==='failed')$('apiDetails').open=true;
 }
 $('downloadDiagnostics').onclick=()=>{
-  const payload={app:'Thrnd',version:'6.0.0',diagnostics};
+  const payload={app:'Thrnd',version:'7.0.0',diagnostics};
   const u=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));
   const a=document.createElement('a');a.href=u;a.download='thrnd-api-diagnostics.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);
 };
@@ -47,7 +48,7 @@ chatUI=initChat({
  report:diagnose,
  applyState:state=>{$('violence').checked=state.groups.violence;$('sexual_content').checked=state.groups.sexual;$('strong_language').checked=state.groups.language;customRules=state.rules.map(r=>({...r}));if(mode!=='none'&&!loading)reset(true);}
 });
-function invalidate(){chatUI?.cancel();connected='';testCtl?.abort();if(!loading)cancel();failure='';buffering=true;if(mode==='ai')hold('Connection settings changed. Click Test connection.');$('connectionStatus').textContent='Connection not tested.';}
+function invalidate(){batchLimit=CONTRACT.batchSegments;chatUI?.cancel();connected='';testCtl?.abort();if(!loading)cancel();failure='';buffering=true;if(mode==='ai')hold('Connection settings changed. Click Test connection.');$('connectionStatus').textContent='Connection not tested.';}
 for(const id of ['key','model','consent'])$(id).onchange=invalidate;
 $('test').onclick=async()=>{
   if(testing)return;if(!$('key').value.trim()||!$('consent').checked){$('connectionStatus').textContent=explain('AI_SETUP_REQUIRED');return;}
@@ -65,9 +66,9 @@ function pump(){if(mode==='none'||loading||!Number.isFinite(video.duration))retu
   for(const e of horizon(base,video.duration,clock()))if(!records.has(e.start_time))emit(mode==='demo'&&e.start_time<video.duration?decide(e,fixture(e.start_time),toggles(),clock(),'fixture',thresholdFor($('sensitivity').value)):e);
   for(const t of records.keys())if(t<base-180){records.delete(t);attempts.delete(t);}
   if(mode!=='ai'||busy||failure||setupError())return;
-  const pending=[...records.values()].filter(e=>e.start_time>=base&&e.start_time<base+180&&e.reason_code==='PENDING').sort((a,b)=>a.start_time-b.start_time).slice(0,CONTRACT.batchSegments);
-  if(pending.length<CONTRACT.batchSegments&&bufferAhead(records,video.currentTime,video.duration)>=60&&pending.at(-1)?.end_time<video.duration)return;
-  if(pending.length)analyze((attempts.get(pending[0].start_time)||0)>0?pending.filter(e=>(attempts.get(e.start_time)||0)>0).slice(0,3):pending);
+  const pending=[...records.values()].filter(e=>e.start_time>=base&&e.start_time<base+180&&e.reason_code==='PENDING').sort((a,b)=>a.start_time-b.start_time).slice(0,batchLimit);
+  if(pending.length<batchLimit&&bufferAhead(records,video.currentTime,video.duration)>=60&&pending.at(-1)?.end_time<video.duration)return;
+  if(pending.length)analyze(pending[0].last_error!=='API_HTTP_400'&&(attempts.get(pending[0].start_time)||0)>0?pending.filter(e=>(attempts.get(e.start_time)||0)>0).slice(0,3):pending);
 }
 async function sample(t,signal){if(signal.aborted)throw Error('EXTRACTION_TIMEOUT');
   if(Math.abs(probe.currentTime-t)>.001)await new Promise((resolve,reject)=>{const cleanup=()=>{probe.removeEventListener('seeked',ok);signal.removeEventListener('abort',bad);};const ok=()=>{cleanup();resolve();},bad=()=>{cleanup();reject(Error('EXTRACTION_TIMEOUT'));};probe.addEventListener('seeked',ok,{once:true});signal.addEventListener('abort',bad,{once:true});probe.currentTime=t;});
@@ -93,11 +94,12 @@ async function analyze(batch){const token=epoch;busy=true;for(const e of batch)a
     clearTimeout(timer);if(ctl.signal.aborted||clock()-begin>CONTRACT.extractionTimeoutMs)throw Error('EXTRACTION_TIMEOUT');
     phase=`Waiting for Google · ${stamp(batch[0].start_time)}–${stamp(batch.at(-1).end_time)}`;phaseStart=clock();
     const model=normalizeModel($('model').value);
-    const body=await request(`models/${model}:generateContent`,$('key').value.trim(),{contents:[{parts}],generationConfig:{responseMimeType:'application/json',responseJsonSchema:segmentSchema(Object.keys(active).filter(k=>active[k]),batch.length),temperature:0}},ctl.signal,diagnose,{stage:`Analyze ${stamp(batch[0].start_time)}–${stamp(batch.at(-1).end_time)}`,model});
+    diagnose(requestSummary(parts,batch));
+    const body=await request(`models/${model}:generateContent`,$('key').value.trim(),analysisBody(parts),ctl.signal,diagnose,{stage:`Analyze ${stamp(batch[0].start_time)}–${stamp(batch.at(-1).end_time)}`,model});
     if(token!==epoch)return;const text=responseText(body);if(!text){diagnose({stage:'Validate analysis output',state:'failed',finish_reason:body.candidates?.[0]?.finishReason||null,block_reason:body.promptFeedback?.blockReason||null});throw Error('EMPTY_RESPONSE');}const unique=collectRows(text,batch);
     if(unique.size!==batch.length)diagnose({stage:'Validate analysis output',state:'failed',expected_segments:batch.length,received_valid_timestamps:unique.size,provider_message:'Keeping valid rows and retrying missing or duplicate timestamps in smaller batches.'});
     for(const e of batch){const s=unique.get(e.start_time);const definitions=[...FILTERS,...customRules.map(r=>({id:r.id,captions:r.evidence==='subtitles'}))];const scores=s?Object.fromEntries(definitions.map(f=>[f.id,!active[f.id]||f.captions&&!subtitles.length?null:s.scores?.[f.id]])):null;const result=decide(e,scores,toggles(),clock(),'ai',thresholdFor($('sensitivity').value));if(result.status!=='classified'){retryIncomplete(e,result.reason_code);continue;}emit({...result,matched_rules:customRules.filter(r=>r.enabled&&scores?.[r.id]>=thresholdFor($('sensitivity').value)).map(r=>({id:r.id,title:r.title})),batch_latency_ms:clock()-begin});}
-  }catch(e){if(token!==epoch)return;if(e.message==='INVALID_RESPONSE'){for(const item of batch)retryIncomplete(item,e.message);return;}failure=/^(REQUEST_TIMEOUT|EXTRACTION_TIMEOUT|API_HTTP_\d+|INVALID_RESPONSE|EMPTY_RESPONSE|NETWORK_ERROR|INVALID_JSON|CANCELLED)$/.test(e.message)?e.message:'ANALYSIS_FAILED';if(!e.diagnostic)diagnose({stage:'Analysis',state:'failed',code:failure});for(const item of batch)emit({...item,status:'unknown',reason_code:failure});}
+  }catch(e){if(token!==epoch)return;if(e.message==='API_HTTP_400'&&batch.length>1){batchLimit=smallerBatch(batch.length);diagnose({stage:'Analysis compatibility recovery',state:'retrying',next_batch_segments:batchLimit,provider_message:'Google rejected this request. Retrying fewer target segments; no invalid scores are accepted.'});for(const item of batch)emit({...item,status:'unknown',decision:'keep',reason_code:'PENDING',last_error:'API_HTTP_400'});return;}if(e.message==='INVALID_RESPONSE'){for(const item of batch)retryIncomplete(item,e.message);return;}failure=/^(REQUEST_TIMEOUT|EXTRACTION_TIMEOUT|API_HTTP_\d+|INVALID_RESPONSE|EMPTY_RESPONSE|NETWORK_ERROR|INVALID_JSON|CANCELLED)$/.test(e.message)?e.message:'ANALYSIS_FAILED';if(!e.diagnostic)diagnose({stage:'Analysis',state:'failed',code:failure});for(const item of batch)emit({...item,status:'unknown',reason_code:failure});}
   finally{clearTimeout(timer);if(token===epoch){busy=false;phase='';pump();}}
 }
 function render(){const visible=horizon(video.currentTime,video.duration,clock()).map(e=>records.get(e.start_time)||e);$('timeline').replaceChildren(...visible.map(e=>{const cell=document.createElement('div');cell.className='cell '+(e.status==='classified'?e.decision:'');cell.title=`${stamp(e.start_time)}–${stamp(e.end_time)} ${e.decision} / ${e.reason_code}`;return cell;}));$('coverage').textContent=`${visible.filter(e=>e.status==='classified').length} / 90 classified`;$('events').textContent=JSON.stringify(visible,null,2);$('position').textContent=`${stamp(video.currentTime)} / ${stamp(video.duration||0)}`;$('skips').textContent=`${skipped.size} skipped segments`;$('buffer').textContent=`${Math.floor(bufferAhead(records,video.currentTime,video.duration))}s`;}

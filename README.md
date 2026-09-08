@@ -1,7 +1,7 @@
-# Thrnd 6.0 — See what you want
+# Thrnd 7.0 — See what you want
 
 ## Install
-Unzip. Remove the previous extension at chrome://extensions, enable Developer mode, and Load unpacked → select the new thrnd-extension folder. Close old player tabs. Open Thrnd from its extension icon and check the V6.0 header.
+Unzip. Remove the previous extension at chrome://extensions, enable Developer mode, and Load unpacked → select the new thrnd-extension folder. Close old player tabs. Open Thrnd from its extension icon and check the V7.0 header.
 
 Enter your Gemini key, check consent, leave Model ID blank and click Test connection. It verifies image input and structured JSON. Then choose a local MP4 and press Play.
 
@@ -28,14 +28,16 @@ Any enabled built-in or custom match authorizes a skip. There is no global allow
 Filter/rule/sensitivity changes cancel old analysis, rewind at most to the start of the current 2-second interval, clear outdated decisions and rebuild the buffer from that position. Playback resumes automatically if it was running. Restart session explicitly returns to the beginning. Manual changes invalidate an in-flight chat plan so stale replies cannot overwrite new settings.
 
 ## Incomplete decision recovery
-Version 6 requests a JSON Schema containing the target count, source timestamps and required active category/custom-rule scores. Output still requires validation; a schema cannot prove content accuracy.
+Version 7 requests JSON output without the complex generated response schema. Source timestamps and all required active category/custom-rule scores are validated locally before decisions can authorize playback. Output validation does not establish content accuracy.
+
+If Google rejects an analysis request with HTTP 400, the player retries fewer target segments: 15 → 5 → 1. A rejection at one segment stops automatic recovery and remains visible in diagnostics. Authentication, quota and network errors do not trigger this compatibility fallback. The reported generic INVALID_ARGUMENT message does not identify its exact cause; this change simplifies the request and exposes its shape for diagnosis.
 
 Valid rows from partial replies are preserved. Missing, duplicate-timestamp, malformed or unassessable decisions stay unknown. Missing work is retried separately in batches of up to three segments, with at most three total attempts per unresolved segment. After that, Retry analysis explicitly starts a new attempt budget while preserving successful decisions and current position. No authentication, quota or network error gets an unbounded retry loop. Automatic repair requests may incur additional API charges.
 
 An error ahead no longer immediately interrupts already-classified content. The player may continue through its usable buffer, then pauses at the low-water boundary if analysis is unavailable. It never treats missing scores as a safe keep. Diagnostics record counts/finish reasons without logging raw frame responses.
 
 ## Video pipeline
-Four frames per 2-second segment (2 FPS), plus up to two seconds of context at each batch boundary. The model is instructed to recognize attacks, impact, falls and immediate aftermath as a sequence, without requiring blood. Requests target up to 15 segments (30 source seconds), with up to 68 sampled images including context. Extraction gets 60 seconds; Google gets 90 seconds per request. More images and custom rules can increase cost and latency.
+Four frames per 2-second segment (2 FPS), plus up to two seconds of context at each batch boundary. The model is instructed to recognize attacks, impact, falls and immediate aftermath as a sequence, without requiring blood. Requests initially target up to 15 segments (30 source seconds), shrinking after HTTP 400 rejection, with up to 68 sampled images including context. Extraction gets 60 seconds; Google gets 90 seconds per request. More images and custom rules can increase cost and latency.
 
 Playback begins when 30 source seconds are classified; it re-buffers below six seconds, resuming with 30 ready (or all remaining media for short files). The 180-second decision horizon advances through the entire file. Consecutive 2-second skips are merged. This is not whole-movie pre-indexing or whole-scene guaranteed removal.
 
@@ -47,10 +49,10 @@ Local finite seekable files only; no Netflix/DRM integration. Audio is not analy
 ## Privacy and logs
 Key stays in this tab's memory. With consent, Google receives test images, sampled video frames, subtitle text, chat requests/history and rule definitions as appropriate. Provider charges/data policies apply. Chat and custom rules stay in this tab; they are not saved after closing it.
 
-Download diagnostics captures the latest 300 request records with stage, endpoint, model, HTTP status and redacted Google error text. No request headers, frames or subtitle payloads are deliberately logged. Review before sharing. Export event log (schema 3.0) includes settings, custom rule definitions, thresholds, scores, matching rule IDs/titles, retries and actual skips. Custom rule text can be personal; review this export too. Recent 20,000 log entries are retained with a dropped-entry count. Export periodically for long sessions.
+Download diagnostics captures the latest 300 request records with stage, endpoint, model, HTTP status and redacted Google error text. Analysis diagnostics also include target count, image count, approximate request size and invalid field names when supplied by Google. No request headers, frames or subtitle payloads are deliberately logged. Review before sharing. Export event log (schema 3.0) includes settings, custom rule definitions, thresholds, scores, matching rule IDs/titles, retries and actual skips. Custom rule text can be personal; review this export too. Recent 20,000 log entries are retained with a dropped-entry count. Export periodically for long sessions.
 
 ## Files and tests
-player.js integrates playback, recovery and chat; chat.js calls Gemini and renders editable rules; rules.js defines group expansion and validates compiler output; categories.js supplies predicates; core.js decides keep/skip; decisions.js validates partial replies and builds the output schema; api.js handles requests, model fallback and diagnostics.
+player.js integrates playback, recovery and chat; chat.js calls Gemini and renders editable rules; rules.js defines group expansion and validates compiler output; categories.js supplies predicates; core.js decides keep/skip; decisions.js parses partial replies; transport.js builds the simplified analysis request and batch fallback; api.js handles requests, model fallback and diagnostics.
 
 Run npm test with Node. Optional tests/browser.cjs needs Playwright and Chromium. No build step is required to install the extension. See VALIDATION.md for what was verified.
 

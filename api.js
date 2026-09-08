@@ -21,7 +21,10 @@ export async function request(path,key,body,parent,report=()=>{},context={}){
     let data;try{data=await r.json();}catch(e){if(ctl.signal.aborted||parent?.aborted)throw e;throw new ApiError(r.ok?'INVALID_JSON':`API_HTTP_${status}`,safePublish({state:'failed',http_status:status,provider_message:'The endpoint returned a non-JSON response.'}));}
     if(parent?.aborted)throw Error('CANCELLED');
     if(ctl.signal.aborted||performance.now()-start>CONTRACT.requestTimeoutMs)throw Error('REQUEST_TIMEOUT');
-    if(!r.ok)throw new ApiError(`API_HTTP_${status}`,safePublish({state:'failed',http_status:status,provider_status:String(data.error?.status||''),provider_message:String(data.error?.message||'No provider message returned.')}));
+    if(!r.ok){
+      const fields=(data.error?.details||[]).flatMap(d=>d.fieldViolations||[]).map(v=>String(v.field||'')).slice(0,20).join(', ');
+      throw new ApiError(`API_HTTP_${status}`,safePublish({state:'failed',http_status:status,provider_status:String(data.error?.status||''),provider_message:String(data.error?.message||'No provider message returned.'),invalid_fields:fields}));
+    }
     safePublish({state:'succeeded',http_status:status});return data;
   }catch(e){
     if(e instanceof ApiError)throw e;
