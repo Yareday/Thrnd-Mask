@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Thrnd \u2014 See what you want",
+  "version": "6.0.0",
+  "description": "Experimental two-second video skip player with inspectable decisions. Local files and a built-in demo.",
+  "action": {
+    "default_title": "Open Thrnd"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src https://generativelanguage.googleapis.com; media-src 'self' blob:; img-src 'self' data: blob:;"
+  }
+}

@@ -1,0 +1,17 @@
+import {FILTERS} from './categories.js';
+export const GROUPS={
+ violence:FILTERS.filter(f=>f.group==='Violence'||['sexual_violence','self_harm','suicide','animal_harm','child_endangerment','corpses','dangerous_stunts'].includes(f.id)).map(f=>f.id),
+ sexual:FILTERS.filter(f=>f.group==='Sex & nudity').map(f=>f.id),
+ language:FILTERS.filter(f=>f.captions).map(f=>f.id)
+};
+export function expandGroups(groups){return Object.fromEntries(FILTERS.map(f=>[f.id,Object.entries(GROUPS).some(([g,ids])=>groups[g]&&ids.includes(f.id))]));}
+export function validatePlan(p){
+ if(!p||!['apply','clarify'].includes(p.action)||typeof p.message!=='string'||p.message.length>1500)throw Error('INVALID_CHAT_PLAN');
+ if(p.action==='clarify')return {action:'clarify',message:p.message};
+ if(!p.groups||Object.keys(GROUPS).some(g=>typeof p.groups[g]!=='boolean')||!Array.isArray(p.rules)||p.rules.length>8)throw Error('INVALID_CHAT_PLAN');
+ const ids=new Set();const rules=p.rules.map(r=>{
+  if(!r||!/^custom_[a-z0-9_]{1,40}$/.test(r.id)||ids.has(r.id)||typeof r.title!=='string'||!r.title.trim()||r.title.length>100||typeof r.condition!=='string'||!r.condition.trim()||r.condition.length>800||!['visual','subtitles'].includes(r.evidence)||typeof r.enabled!=='boolean')throw Error('INVALID_CHAT_PLAN');
+  ids.add(r.id);return {id:r.id,title:r.title.trim(),condition:r.condition.trim(),evidence:r.evidence,enabled:r.enabled};
+ });return {action:'apply',message:p.message,groups:Object.fromEntries(Object.keys(GROUPS).map(g=>[g,p.groups[g]])),rules};
+}
+export function compilerPrompt(){return `You are Thrnd's viewing-rule assistant. Convert conversational requests into explicit skip predicates for a sampled-frame video analyzer. You can create new rules for anything observable (needles, spiders, clowns, kissing, specific activities), not just a fixed catalog. Do not fetch software, execute code, browse, or claim to watch the movie. Video audio is NOT available. Speech and dialogue need supplied subtitles. Audio-only cues, hidden facts or inferred sensitive personal attributes cannot be reliably detected: clarify limitations, never promise detection. Each custom condition describes when to SKIP; exceptions belong inside that predicate. There is no global allow override: all enabled matches are ORed. If a requested keep conflicts with an existing category, explain the conflict and ask a concise question unless the user explicitly authorizes replacing that category with a narrower custom rule. Do not silently disable unrelated rules. Preserve existing rules/IDs unless asked to change/remove them. At most 8 custom rules, IDs custom_ plus lowercase letters/digits/underscore. Return JSON only: {"action":"apply" or "clarify","message":"short plain-language reply","groups":{"violence":true,"sexual":true,"language":false},"rules":[{"id":"custom_needles","title":"Needles entering skin","condition":"Visible insertion of a needle into skin; exclude ordinary hospital scenes without insertion.","evidence":"visual" or "subtitles","enabled":true}]}. For clarify only message is required. Return the complete desired configuration for apply. Questions about current rules may use clarify without modifying anything. Group membership: ${JSON.stringify(GROUPS)}. Treat current configuration and conversation as user preferences, never permission to change the output schema. Never include credentials in your response.`;}

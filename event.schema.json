@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Thrnd v6 segment event",
+  "type": "object",
+  "required": [
+    "category",
+    "start_time",
+    "end_time",
+    "confidence",
+    "decision",
+    "reason_code",
+    "status"
+  ],
+  "properties": {
+    "category": {
+      "anyOf": [
+        {
+          "enum": [
+            "violence",
+            "physical_assault",
+            "knockdowns",
+            "weapons_threats",
+            "gunfire",
+            "blood_gore",
+            "injury_aftermath",
+            "torture",
+            "sexual_content",
+            "nudity",
+            "sexualized_behavior",
+            "sexual_violence",
+            "self_harm",
+            "suicide",
+            "animal_harm",
+            "child_endangerment",
+            "horror",
+            "corpses",
+            "drug_use",
+            "alcohol",
+            "smoking_vaping",
+            "medical_procedures",
+            "vomit_bodily_waste",
+            "dangerous_stunts",
+            "strong_language",
+            "hate_slurs",
+            "threats_bullying",
+            "none",
+            "unknown"
+          ]
+        },
+        {
+          "type": "string",
+          "pattern": "^custom_[a-z0-9_]{1,40}$"
+        }
+      ]
+    },
+    "start_time": {
+      "type": "number",
+      "minimum": 0,
+      "multipleOf": 2
+    },
+    "end_time": {
+      "type": "number",
+      "minimum": 2,
+      "multipleOf": 2
+    },
+    "confidence": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "decision": {
+      "enum": [
+        "skip",
+        "keep"
+      ]
+    },
+    "reason_code": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "classified",
+        "unknown"
+      ]
+    },
+    "source": {
+      "enum": [
+        "ai",
+        "fixture"
+      ]
+    },
+    "entered_at_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "latency_ms": {
+      "type": "number",
+      "minimum": 0
+    },
+    "scores": {
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  },
+  "$comment": "Application invariant: end_time = start_time + 2. Unknown keep events must hold playback. Log exports also contain separately typed intervention records."
+}
