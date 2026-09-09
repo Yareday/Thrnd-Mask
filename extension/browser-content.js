@@ -1,5 +1,6 @@
 (()=>{
  if(globalThis.__thrnd8)return;globalThis.__thrnd8=true;
+ const SCAN_WINDOW_SECONDS=180;
  let armed=false,v=null,phase='off',epoch=0,anchor=0,muted=false,cover=null,label=null,source='',wantPlay=false,lastStatus='',busy=false;
  const decisions=new Map();
  const rpc=async m=>{const r=await chrome.runtime.sendMessage({target:'worker',...m});if(!r?.ok)throw Error(r?.error||'Thrnd connection lost');return r.value;};
@@ -18,7 +19,7 @@
    if(v.mediaKeys)throw Error('Protected video is unsupported. Filtering is not active.');
    if(!Number.isFinite(v.duration)||v.duration<=0||!v.seekable.length)throw Error('A finite, seekable video is required. Live streams are unsupported.');
    const canvas=document.createElement('canvas');canvas.width=384;canvas.height=Math.max(1,Math.round(384*(v.videoHeight||9)/(v.videoWidth||16)));const ctx=canvas.getContext('2d');
-   const first=Math.floor(anchor/2)*2,end=Math.min(v.duration,first+30);
+    const first=Math.floor(anchor/2)*2,end=Math.min(v.duration,first+SCAN_WINDOW_SECONDS);
    for(let start=first;start<end;){
     const batch=[];
     while(batch.length<3&&start<end){
@@ -27,7 +28,7 @@
      for(const offset of [.25,.75,1.25,1.75]){const t=Math.min(start+offset,v.duration-.04);await seek(t,token);ctx.drawImage(v,0,0,canvas.width,canvas.height);let data;try{data=canvas.toDataURL('image/jpeg',.65).split(',')[1];}catch{throw Error('This website blocks frame extraction. Filtering is not active.');}item.frames.push({time:t,data});}
      batch.push(item);start+=2;
     }
-    if(batch.length){status('Analyzing · '+Math.min(30,start-first)+' / 30 source seconds');const rows=await rpc({op:'analyze',batch});guard(token);for(const r of rows)decisions.set(r.start_time,r);}
+    if(batch.length){status('Analyzing · '+Math.min(SCAN_WINDOW_SECONDS,start-first)+' / '+Math.min(SCAN_WINDOW_SECONDS,Math.ceil(end-first))+' source seconds');const rows=await rpc({op:'analyze',batch});guard(token);for(const r of rows)decisions.set(r.start_time,r);}
    }
    phase='restore';let safe=anchor;while(safe<v.duration&&decisions.get(Math.floor(safe/2)*2)?.decision==='skip')safe=decisions.get(Math.floor(safe/2)*2).end_time;await seek(Math.min(safe,v.duration-.04),token);guard(token);anchor=v.currentTime;phase='ready';busy=false;if(safe>=v.duration-.04){v.muted=muted;hide();status('Active · end of video');return;}if(!decisions.has(Math.floor(safe/2)*2)){analyzeWindow();return;}v.muted=muted;hide();status('Active · classified section');if(wantPlay)await v.play();
   }catch(e){if(token!==epoch)return;phase='restore';try{if(identity()===source)await seek(anchor,token);}catch{}if(token!==epoch)return;phase='error';v?.pause();shield(e.message);status('Error · '+e.message);}

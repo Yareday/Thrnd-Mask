@@ -1,0 +1,4 @@
+dist/
+node_modules/
+browser-preview.png
+.DS_Store

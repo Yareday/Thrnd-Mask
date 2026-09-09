@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+let listener;globalThis.chrome={runtime:{id:'test',onMessage:{addListener(f){listener=f;}},sendMessage:async()=>({})}};
+await import('../extension/offscreen.js');
+const config={key:'fake-key',model:'gemini-test',consent:true,groups:{violence:false,sexual:false,language:false},rules:[{id:'custom_spiders',condition:'Visible spiders',title:'Spiders',enabled:true,evidence:'visual'}]};
+const batch=[{start_time:0,end_time:2,captions:null,frames:[.25,.75,1.25,1.75].map(time=>({time,data:'AAA'}))}];
+const call=m=>new Promise(resolve=>listener({target:'engine',op:'analyze',tabId:1,config,batch,...m},{id:'test'},resolve));
+test('v8 engine uses custom predicate in actual request and returns actionable skip',async()=>{let sent;globalThis.fetch=async(url,o)=>{sent=JSON.parse(o.body);return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify({segments:[{start_time:0,scores:{custom_spiders:.99}}]})}]}}]})};};const r=await call({});assert(r.ok);assert.equal(r.value[0].decision,'skip');assert.match(sent.contents[0].parts[0].text,/Visible spiders/);assert.equal(sent.generationConfig.responseJsonSchema,undefined);});
+test('v8 engine rejects incomplete scores even after repair',async()=>{let calls=0;globalThis.fetch=async()=>{calls++;return {ok:true,status:200,json:async()=>({candidates:[{content:{parts:[{text:'{"segments":[{"start_time":0,"scores":{}}]}'}]}}]})};};const r=await call({});assert.equal(r.ok,false);assert.equal(calls,2);});
+test('v8 language without caption evidence is blocked before calling Google',async()=>{globalThis.fetch=async()=>{throw Error('Must not call');};const r=await call({config:{...config,groups:{...config.groups,language:true}}});assert.equal(r.ok,false);assert.match(r.error,/subtitles/i);});

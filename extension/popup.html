@@ -7,5 +7,5 @@
 <small>Language needs a complete, readable browser caption track. Audio is not analyzed.</small>
 <label>Additional requests<textarea id="prompt" maxlength="2000" placeholder="Also skip spiders, but keep drawings of spiders"></textarea></label><button id="chat">Apply request</button><p id="reply" role="status"></p><div id="rules"></div>
 <div class="actions"><button id="go">Go on this tab</button><button id="stop">Stop on this tab</button></div><p id="status" role="status">Off</p>
-<small>Experimental: covers and mutes the player while analyzing 30 seconds ahead, then returns to your position. Repeats between sections. Readiness can take longer than 30 seconds. Works only where seeking and frame access succeed.</small>
+<small>Experimental: covers and mutes the player while analyzing up to three minutes ahead, then returns to your position. Repeats only after that buffer is consumed. Readiness can take longer than three minutes. Works only where seeking and frame access succeed.</small>
 <details><summary>Diagnostics</summary><pre id="diagnostics"></pre></details><script type="module" src="popup.js"></script></body></html>

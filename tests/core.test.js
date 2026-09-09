@@ -1,0 +1,11 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {horizon,decide,fixture,parseVtt,bufferAhead} from '../extension/core.js';
+const enabled={violence:true,sexual_content:true,strong_language:true};
+test('exactly 90 aligned two-second events including unavailable tail',()=>{const a=horizon(3,100,0);assert.equal(a.length,90);assert.equal(a[0].start_time,2);assert.equal(a[89].end_time,182);assert.equal(a[50].reason_code,'OUTSIDE_SOURCE');assert(a.every(e=>e.end_time-e.start_time===2));});
+test('balanced threshold and selected toggles',()=>{const e=horizon(0,200,0)[0];assert.equal(decide(e,{violence:.799,sexual_content:0,strong_language:0},enabled,5).decision,'keep');assert.equal(decide(e,fixture(10),enabled,5).decision,'skip');assert.equal(decide(e,fixture(10),{...enabled,violence:false},5).decision,'keep');});
+test('valid queued answers no longer expire after five seconds',()=>{const e=horizon(0,200,0)[0];const r=decide(e,fixture(10),enabled,65000);assert.equal(r.status,'classified');assert.equal(r.decision,'skip');assert.equal(r.latency_ms,65000);});
+test('buffer stops at unknown gap and clamps to end of file',()=>{const m=new Map(horizon(0,200,0).map(e=>[e.start_time,{...e,status:'classified'}]));assert.equal(bufferAhead(m,1,200),179);m.get(10).status='unknown';assert.equal(bufferAhead(m,1,200),9);assert.equal(bufferAhead(m,0,9),9);});
+test('unknown language is not safe; known enabled match may still skip',()=>{const e=horizon(0,200,0)[0];assert.equal(decide(e,{violence:0,sexual_content:0,strong_language:null},enabled,1).status,'unknown');assert.equal(decide(e,{violence:1,sexual_content:0,strong_language:null},enabled,1).decision,'skip');});
+test('reject malformed or incomplete scores',()=>{const e=horizon(0,200,0)[0];for(const scores of [{},{violence:NaN,sexual_content:0,strong_language:0},{violence:2,sexual_content:0,strong_language:0}])assert.equal(decide(e,scores,enabled,1).reason_code,'INVALID_RESPONSE');});
+test('subtitle timing parses SRT and VTT',()=>{assert.deepEqual(parseVtt('WEBVTT\n\n00:01.000 --> 00:03.000\nHello')[0],{start:1,end:3,text:'Hello'});assert.equal(parseVtt('1\n00:00:01,250 --> 00:00:02,500\nHi')[0].start,1.25);});

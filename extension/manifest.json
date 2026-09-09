@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Thrnd \u2014 See what you want",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "description": "Experimental in-page video filtering with popup controls and readiness-based analysis.",
   "action": {
     "default_title": "Open Thrnd",
