@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Thrnd 8</title><link rel="stylesheet" href="popup.css"></head><body>
+<header><strong>Thrnd</strong><span>8.0 · Browser preview</span></header><h1>See what you want.</h1>
+<label>Gemini API key<input id="key" type="password" autocomplete="off"></label><label>Model ID<input id="model" placeholder="Auto-select on Test"></label>
+<label class="check"><input id="consent" type="checkbox">Send sampled frames, available captions and chat to Google for analysis. API charges may apply.</label>
+<button id="test">Test connection</button><p id="connection" role="status"></p>
+<fieldset><legend>Skip content</legend><label><input id="violence" type="checkbox" checked>Violence</label><label><input id="sexual" type="checkbox" checked>Sexual content / nudity</label><label><input id="language" type="checkbox">Strong language</label></fieldset>
+<small>Language needs a complete, readable browser caption track. Audio is not analyzed.</small>
+<label>Additional requests<textarea id="prompt" maxlength="2000" placeholder="Also skip spiders, but keep drawings of spiders"></textarea></label><button id="chat">Apply request</button><p id="reply" role="status"></p><div id="rules"></div>
+<div class="actions"><button id="go">Go on this tab</button><button id="stop">Stop on this tab</button></div><p id="status" role="status">Off</p>
+<small>Experimental: covers and mutes the player while analyzing 30 seconds ahead, then returns to your position. Repeats between sections. Readiness can take longer than 30 seconds. Works only where seeking and frame access succeed.</small>
+<details><summary>Diagnostics</summary><pre id="diagnostics"></pre></details><script type="module" src="popup.js"></script></body></html>

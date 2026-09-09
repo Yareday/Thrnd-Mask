@@ -1,7 +1,5 @@
-# Thrnd 7.0 validation
+# Thrnd 8.0 validation
 
-All 36 automated tests passed. Automated core, mocked API and simulated DOM/media tests cover group expansion; dynamic custom rules; a custom match executing a playback skip; invalid-plan rejection; partial-reply preservation; bounded repair; buffering; and model compatibility diagnostics.
+43 automated tests passed, including 36 retained tests for shared/v7 behavior and seven v8 tests. V8 simulated media tests exercise thirty-second readiness, bounded frame batches, restoration, initial skips before reveal, errors holding playback and Stop cancellation. Mocked Gemini tests exercise actual custom predicates in request construction, actionable scores, rejection of missing scores after repair and missing-subtitle blocking.
 
-Version 7 adds regression coverage for HTTP 400 analysis recovery from 15 to 5 to 1 target segments, stopping after a one-segment rejection, manual retry, simplified JSON requests without a response schema, request-shape diagnostics that omit image contents, and invalid-field diagnostics with key redaction.
-
-Live Gemini requests, real movie recognition and actual Chrome playback are not verified in this environment. There is no supplied Gemini API key and no installed Chromium executable. Simulated tests verify implementation paths, not accuracy of Gemini decisions. The generic provider error does not establish the exact rejected argument. No false-skip or missed-event rate is established.
+These tests are not real Chrome extension integration tests. Neither live Gemini nor YouTube decoding/frame extraction was verified. The earlier browser test could load YouTube controls but produced no decoded video. Offscreen creation, Chrome message routing, popup lifetime, site event interactions, actual audio/video timing, ad transitions and pixel access require on-device testing. No measured classification accuracy or exposure guarantee exists.
